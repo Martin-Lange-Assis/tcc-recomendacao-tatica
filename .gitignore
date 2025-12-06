@@ -205,3 +205,19 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# --- PERSONALIZADO DO TCC ---
+
+# Ignorar pastas de dados (SofaScore)
+data/
+data/raw/
+data/processed/
+
+# Ignorar arquivos de dados pesados soltos
+*.csv
+*.json
+*.xlsx
+*.xml
+
+# Ignorar configurações de IDE (pra não dar conflito se você trocar de PC)
+.idea/

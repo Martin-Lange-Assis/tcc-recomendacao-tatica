@@ -10,9 +10,9 @@ def modulo_extracao():
     from conversor_jsonl import processar_conversao
 
     # --- CONFIGURAÇÃO ---
-    ARQUIVO_ENTRADA = 'C:/Users/marti/PycharmProjects/tcc-recomendacao-tatica/data/raw/jogadores_brasileirao_2025.csv'
-    ARQUIVO_SAIDA = 'C:/Users/marti/PycharmProjects/tcc-recomendacao-tatica/data/raw/dados_brutos_stats.jsonl'
-    SPREADSHEET_ID = "1hiO9C0AKr3ALx74B2pvXAMKsWcWySbkm2Wi3x2Xu2Yg"
+    ARQUIVO_ENTRADA = 'caminho'
+    ARQUIVO_SAIDA = 'caminho'
+    SPREADSHEET_ID = "id"
 
     ID_TORNEIO = 325
     ID_SEASON = 72034
@@ -22,7 +22,7 @@ def modulo_extracao():
         'accept': '*/*',
         'referer': 'https://www.sofascore.com/pt/torneio/futebol/brazil/brasileirao-serie-a/325',
         'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-        'x-requested-with': '6213f1',
+        'x-requested-with': 'x',
         'cookie': 'cookie',
     }
 

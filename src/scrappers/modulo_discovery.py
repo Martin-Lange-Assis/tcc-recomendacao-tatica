@@ -15,14 +15,14 @@ def modulo_discovery():
         'accept': '*/*',
         'referer': 'https://www.sofascore.com/pt/torneio/futebol/brazil/brasileirao-serie-a/325',
         'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-        'x-requested-with': 'x',
+        'x-requested-with': 'xxx',
         'cookie': 'cookie',
     }
 
     # --- CONFIGURAÇÃO DE ARQUIVOS ---
-    id_da_planilha = "id"
+    id_da_planilha = "id_planilha"
 
-    pasta_destino = 'caminho'
+    pasta_destino = 'destino'
     nome_arquivo = 'jogadores_brasileirao_2025.csv'
 
     # Lista para acumular os erros

@@ -7,7 +7,7 @@ from conectar_google_api import salvar_dataframe
 PASTA_PROJETO = 'caminho'
 ARQUIVO_JSONL = f'{PASTA_PROJETO}/dados_brutos_stats.jsonl'
 ARQUIVO_CSV_FINAL = f'{PASTA_PROJETO}/tabela_final_stats_2025.csv'
-SPREADSHEET_ID = "id"  # <--- SEU ID
+SPREADSHEET_ID = "id_planilha"  # <--- SEU ID
 
 
 def processar_conversao():
@@ -41,7 +41,7 @@ def processar_conversao():
             outras_colunas.append(c)
     ordem_final = colunas_fixas + outras_colunas
 
-    # Reordena e PREENCHE VAZIOS (Importante para o Sheets)
+    # Reordena e PREENCHE VAZIOS
     df = df[ordem_final].fillna('')
 
     # 3. Salva o CSV final limpo (Backup Local)

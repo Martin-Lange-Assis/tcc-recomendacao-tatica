@@ -44,11 +44,10 @@ def salvar_dataframe(dataframe, id_planilha, nome_aba, json_file=CAMINHO_PADRAO)
             print(f"[Sheets] Criando nova aba: {nome_aba}")
             worksheet = sh.add_worksheet(title=nome_aba, rows=dataframe.shape[0] + 50, cols=dataframe.shape[1] + 5)
 
-        # --- TRATAMENTO DE DADOS (A CORREÇÃO ESTÁ AQUI) ---
+        # --- TRATAMENTO DE DADOS ---
         df_limpo = dataframe.fillna('')
 
         # Verifica cada coluna: se tiver dicionários ou listas, converte para Texto (String)
-        # Isso impede o erro "struct_value" / "Invalid values"
         for col in df_limpo.columns:
             # Se a coluna for do tipo 'object' (pode conter dicts), forçamos string
             if df_limpo[col].dtype == 'object':
@@ -57,7 +56,6 @@ def salvar_dataframe(dataframe, id_planilha, nome_aba, json_file=CAMINHO_PADRAO)
         # Prepara os dados: Cabeçalho + Linhas
         dados = [df_limpo.columns.values.tolist()] + df_limpo.values.tolist()
 
-        # Envia
         worksheet.update(range_name='A1', values=dados)
 
         print(f"[Sheets] Sucesso! {len(dataframe)} linhas enviadas para '{nome_aba}'.")

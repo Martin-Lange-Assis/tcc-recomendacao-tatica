@@ -12,14 +12,14 @@ def especificador_posicoes():
     ARQUIVO_SAIDA = f'{PASTA_PROJETO}/jogadores_posicoes_detalhadas.csv'
 
     # Configure seu ID aqui
-    SPREADSHEET_ID = "id_planilha"
+    SPREADSHEET_ID = "id"
 
     headers = {
         'authority': 'www.sofascore.com',
         'accept': '*/*',
         'referer': 'https://www.sofascore.com/',
         'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-        'x-requested-with': 'xxx',
+        'x-requested-with': 'x',
         'cookie': 'cookie',
     }
 

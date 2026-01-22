@@ -10,9 +10,9 @@ def modulo_extracao():
     from conversor_jsonl import processar_conversao
 
     # --- CONFIGURAÇÃO ---
-    ARQUIVO_ENTRADA = 'entrada'
-    ARQUIVO_SAIDA = 'saida'
-    SPREADSHEET_ID = "id_planilha"
+    ARQUIVO_ENTRADA = 'caminho'
+    ARQUIVO_SAIDA = 'caminho'
+    SPREADSHEET_ID = "id"
 
     ID_TORNEIO = 325
     ID_SEASON = 72034
@@ -22,7 +22,7 @@ def modulo_extracao():
         'accept': '*/*',
         'referer': 'https://www.sofascore.com/pt/torneio/futebol/brazil/brasileirao-serie-a/325',
         'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-        'x-requested-with': 'xxxx',
+        'x-requested-with': 'x',
         'cookie': 'cookie',
     }
 
@@ -39,7 +39,7 @@ def modulo_extracao():
             alvo (str, opcional): alvo do erro. Por padrão pode ser "N/A".
         """
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        print(f"[{tipo}] {alvo}: {mensagem}")
+        print(f"⚠️ [{tipo}] {alvo}: {mensagem}")
         lista_erros.append({
             "Data_Hora": timestamp,
             "Script": "Extrator de Stats",

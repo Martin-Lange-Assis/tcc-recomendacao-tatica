@@ -1,0 +1,205 @@
+from typing import List, Optional
+from datetime import datetime
+from sqlalchemy import ForeignKey, String, Float, Integer, BigInteger, Table, Column, DateTime, Text
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from database import Base
+
+# --- Tabelas de Associação (N:M) ---
+jogador_posicao = Table(
+    "jogador_posicao",
+    Base.metadata,
+    Column("player_id", ForeignKey("jogadores.player_id"), primary_key=True),
+    Column("id_posicao", ForeignKey("posicoes_ref.id_posicao"), primary_key=True),
+)
+
+jogador_setor = Table(
+    "jogador_setor",
+    Base.metadata,
+    Column("player_id", ForeignKey("jogadores.player_id"), primary_key=True),
+    Column("id_setor", ForeignKey("setores_ref.id_setor"), primary_key=True),
+)
+
+
+# --- Classes Principais ---
+
+class Jogador(Base):
+    __tablename__ = "jogadores"
+
+    player_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    name: Mapped[str] = mapped_column(String(150), nullable=False)
+    slug: Mapped[str] = mapped_column(String(150))
+    posicao_bruta: Mapped[Optional[str]] = mapped_column(String(10))
+    height: Mapped[Optional[float]] = mapped_column(Float)
+    preferredFoot: Mapped[Optional[str]] = mapped_column(String(20))
+    dateOfBirthTimestamp: Mapped[Optional[float]] = mapped_column(Float)
+    country_name: Mapped[Optional[str]] = mapped_column(String(100))
+    time_id: Mapped[Optional[int]] = mapped_column(Integer)
+    time_nome: Mapped[Optional[str]] = mapped_column(String(100))
+    url_imagem: Mapped[Optional[str]] = mapped_column(String(255))
+
+    # Relacionamentos
+    posicoes: Mapped[List["PosicaoRef"]] = relationship(secondary=jogador_posicao)
+    setores: Mapped[List["SetorRef"]] = relationship(secondary=jogador_setor)
+    estatisticas: Mapped["Estatistica2025"] = relationship(back_populates="jogador", uselist=False)
+    classificacoes: Mapped[List["ClassificacaoJogadores"]] = relationship(back_populates="jogador")
+    contexto_tatico: Mapped["CaracteristicaTatica"] = relationship(back_populates="jogador", uselist=False)
+
+
+class Estatistica2025(Base):
+    __tablename__ = "estatisticas_2025"
+
+    player_id: Mapped[int] = mapped_column(ForeignKey("jogadores.player_id"), primary_key=True)
+
+    # Mapeamento automático de todas as 116 métricas do CSV
+    rating: Mapped[Optional[float]] = mapped_column(Float)
+    totalRating: Mapped[Optional[float]] = mapped_column(Float)
+    countRating: Mapped[Optional[int]] = mapped_column(Integer)
+    goals: Mapped[Optional[int]] = mapped_column(Integer)
+    bigChancesCreated: Mapped[Optional[int]] = mapped_column(Integer)
+    bigChancesMissed: Mapped[Optional[int]] = mapped_column(Integer)
+    assists: Mapped[Optional[int]] = mapped_column(Integer)
+    expectedAssists: Mapped[Optional[float]] = mapped_column(Float)
+    goalsAssistsSum: Mapped[Optional[int]] = mapped_column(Integer)
+    accuratePasses: Mapped[Optional[int]] = mapped_column(Integer)
+    inaccuratePasses: Mapped[Optional[int]] = mapped_column(Integer)
+    totalPasses: Mapped[Optional[int]] = mapped_column(Integer)
+    accuratePassesPercentage: Mapped[Optional[float]] = mapped_column(Float)
+    accurateOwnHalfPasses: Mapped[Optional[int]] = mapped_column(Integer)
+    accurateOppositionHalfPasses: Mapped[Optional[int]] = mapped_column(Integer)
+    accurateFinalThirdPasses: Mapped[Optional[int]] = mapped_column(Integer)
+    keyPasses: Mapped[Optional[int]] = mapped_column(Integer)
+    successfulDribbles: Mapped[Optional[int]] = mapped_column(Integer)
+    successfulDribblesPercentage: Mapped[Optional[float]] = mapped_column(Float)
+    tackles: Mapped[Optional[int]] = mapped_column(Integer)
+    interceptions: Mapped[Optional[int]] = mapped_column(Integer)
+    yellowCards: Mapped[Optional[int]] = mapped_column(Integer)
+    directRedCards: Mapped[Optional[int]] = mapped_column(Integer)
+    redCards: Mapped[Optional[int]] = mapped_column(Integer)
+    accurateCrosses: Mapped[Optional[int]] = mapped_column(Integer)
+    accurateCrossesPercentage: Mapped[Optional[float]] = mapped_column(Float)
+    totalShots: Mapped[Optional[int]] = mapped_column(Integer)
+    shotsOnTarget: Mapped[Optional[int]] = mapped_column(Integer)
+    shotsOffTarget: Mapped[Optional[int]] = mapped_column(Integer)
+    groundDuelsWon: Mapped[Optional[int]] = mapped_column(Integer)
+    groundDuelsWonPercentage: Mapped[Optional[float]] = mapped_column(Float)
+    aerialDuelsWon: Mapped[Optional[int]] = mapped_column(Integer)
+    aerialDuelsWonPercentage: Mapped[Optional[float]] = mapped_column(Float)
+    totalDuelsWon: Mapped[Optional[int]] = mapped_column(Integer)
+    totalDuelsWonPercentage: Mapped[Optional[float]] = mapped_column(Float)
+    minutesPlayed: Mapped[Optional[int]] = mapped_column(Integer)
+    goalConversionPercentage: Mapped[Optional[float]] = mapped_column(Float)
+    penaltiesTaken: Mapped[Optional[int]] = mapped_column(Integer)
+    penaltyGoals: Mapped[Optional[int]] = mapped_column(Integer)
+    penaltyWon: Mapped[Optional[int]] = mapped_column(Integer)
+    penaltyConceded: Mapped[Optional[int]] = mapped_column(Integer)
+    shotFromSetPiece: Mapped[Optional[int]] = mapped_column(Integer)
+    freeKickGoal: Mapped[Optional[int]] = mapped_column(Integer)
+    goalsFromInsideTheBox: Mapped[Optional[int]] = mapped_column(Integer)
+    goalsFromOutsideTheBox: Mapped[Optional[int]] = mapped_column(Integer)
+    shotsFromInsideTheBox: Mapped[Optional[int]] = mapped_column(Integer)
+    shotsFromOutsideTheBox: Mapped[Optional[int]] = mapped_column(Integer)
+    headedGoals: Mapped[Optional[int]] = mapped_column(Integer)
+    leftFootGoals: Mapped[Optional[int]] = mapped_column(Integer)
+    rightFootGoals: Mapped[Optional[int]] = mapped_column(Integer)
+    accurateLongBalls: Mapped[Optional[int]] = mapped_column(Integer)
+    accurateLongBallsPercentage: Mapped[Optional[float]] = mapped_column(Float)
+    clearances: Mapped[Optional[int]] = mapped_column(Integer)
+    errorLeadToGoal: Mapped[Optional[int]] = mapped_column(Integer)
+    errorLeadToShot: Mapped[Optional[int]] = mapped_column(Integer)
+    dispossessed: Mapped[Optional[int]] = mapped_column(Integer)
+    possessionLost: Mapped[Optional[int]] = mapped_column(Integer)
+    possessionWonAttThird: Mapped[Optional[int]] = mapped_column(Integer)
+    totalChippedPasses: Mapped[Optional[int]] = mapped_column(Integer)
+    accurateChippedPasses: Mapped[Optional[int]] = mapped_column(Integer)
+    touches: Mapped[Optional[int]] = mapped_column(Integer)
+    wasFouled: Mapped[Optional[int]] = mapped_column(Integer)
+    fouls: Mapped[Optional[int]] = mapped_column(Integer)
+    hitWoodwork: Mapped[Optional[int]] = mapped_column(Integer)
+    ownGoals: Mapped[Optional[int]] = mapped_column(Integer)
+    dribbledPast: Mapped[Optional[int]] = mapped_column(Integer)
+    offsides: Mapped[Optional[int]] = mapped_column(Integer)
+    blockedShots: Mapped[Optional[int]] = mapped_column(Integer)
+    passToAssist: Mapped[Optional[int]] = mapped_column(Integer)
+    saves: Mapped[Optional[int]] = mapped_column(Integer)
+    cleanSheet: Mapped[Optional[int]] = mapped_column(Integer)
+    penaltyFaced: Mapped[Optional[int]] = mapped_column(Integer)
+    penaltySave: Mapped[Optional[int]] = mapped_column(Integer)
+    savedShotsFromInsideTheBox: Mapped[Optional[int]] = mapped_column(Integer)
+    savedShotsFromOutsideTheBox: Mapped[Optional[int]] = mapped_column(Integer)
+    goalsConcededInsideTheBox: Mapped[Optional[int]] = mapped_column(Integer)
+    goalsConcededOutsideTheBox: Mapped[Optional[int]] = mapped_column(Integer)
+    punches: Mapped[Optional[int]] = mapped_column(Integer)
+    runsOut: Mapped[Optional[int]] = mapped_column(Integer)
+    successfulRunsOut: Mapped[Optional[int]] = mapped_column(Integer)
+    highClaims: Mapped[Optional[int]] = mapped_column(Integer)
+    crossesNotClaimed: Mapped[Optional[int]] = mapped_column(Integer)
+    matchesStarted: Mapped[Optional[int]] = mapped_column(Integer)
+    penaltyConversion: Mapped[Optional[float]] = mapped_column(Float)
+    setPieceConversion: Mapped[Optional[float]] = mapped_column(Float)
+    totalAttemptAssist: Mapped[Optional[int]] = mapped_column(Integer)
+    totalContest: Mapped[Optional[int]] = mapped_column(Integer)
+    totalCross: Mapped[Optional[int]] = mapped_column(Integer)
+    duelLost: Mapped[Optional[int]] = mapped_column(Integer)
+    aerialLost: Mapped[Optional[int]] = mapped_column(Integer)
+    attemptPenaltyMiss: Mapped[Optional[int]] = mapped_column(Integer)
+    attemptPenaltyPost: Mapped[Optional[int]] = mapped_column(Integer)
+    attemptPenaltyTarget: Mapped[Optional[int]] = mapped_column(Integer)
+    totalLongBalls: Mapped[Optional[int]] = mapped_column(Integer)
+    goalsConceded: Mapped[Optional[int]] = mapped_column(Integer)
+    tacklesWon: Mapped[Optional[int]] = mapped_column(Integer)
+    tacklesWonPercentage: Mapped[Optional[float]] = mapped_column(Float)
+    scoringFrequency: Mapped[Optional[float]] = mapped_column(Float)
+    yellowRedCards: Mapped[Optional[int]] = mapped_column(Integer)
+    savesCaught: Mapped[Optional[int]] = mapped_column(Integer)
+    savesParried: Mapped[Optional[int]] = mapped_column(Integer)
+    totalOwnHalfPasses: Mapped[Optional[int]] = mapped_column(Integer)
+    totalOppositionHalfPasses: Mapped[Optional[int]] = mapped_column(Integer)
+    totwAppearances: Mapped[Optional[int]] = mapped_column(Integer)
+    expectedGoals: Mapped[Optional[float]] = mapped_column(Float)
+    goalKicks: Mapped[Optional[int]] = mapped_column(Integer)
+    ballRecovery: Mapped[Optional[int]] = mapped_column(Integer)
+    outfielderBlocks: Mapped[Optional[float]] = mapped_column(Float)
+    appearances: Mapped[Optional[int]] = mapped_column(Integer)
+    goalsPrevented: Mapped[Optional[float]] = mapped_column(Float)
+
+    jogador: Mapped["Jogador"] = relationship(back_populates="estatisticas")
+
+
+# --- Tabelas de Referência ---
+
+class PosicaoRef(Base):
+    __tablename__ = "posicoes_ref"
+    id_posicao: Mapped[int] = mapped_column(primary_key=True)
+    sigla_posicao: Mapped[str] = mapped_column(String(10))
+    nome_posicao: Mapped[str] = mapped_column(String(50), nullable=False)
+
+
+class SetorRef(Base):
+    __tablename__ = "setores_ref"
+    id_setor: Mapped[int] = mapped_column(primary_key=True)
+    nome_setor: Mapped[str] = mapped_column(String(50), nullable=False)
+
+
+class ArquetipoRef(Base):
+    __tablename__ = "arquetipos_ref"
+    id_arquetipo: Mapped[int] = mapped_column(primary_key=True)
+    nome_arquetipo: Mapped[str] = mapped_column(String(100), nullable=False)
+    classificacoes: Mapped[List["ClassificacaoJogadores"]] = relationship(back_populates="arquetipo")
+
+
+class ClassificacaoJogadores(Base):
+    __tablename__ = "classificacao_jogadores"
+    player_id: Mapped[int] = mapped_column(ForeignKey("jogadores.player_id"), primary_key=True)
+    id_arquetipo: Mapped[int] = mapped_column(ForeignKey("arquetipos_ref.id_arquetipo"), primary_key=True)
+    score_similaridade: Mapped[float] = mapped_column(Float)
+    jogador: Mapped["Jogador"] = relationship(back_populates="classificacoes")
+    arquetipo: Mapped["ArquetipoRef"] = relationship(back_populates="classificacoes")
+
+
+class CaracteristicaTatica(Base):
+    __tablename__ = "caracteristicas_taticas"
+    player_id: Mapped[int] = mapped_column(ForeignKey("jogadores.player_id"), primary_key=True)
+    posicoes_detalhadas: Mapped[Optional[str]] = mapped_column(String(255))
+    ids_fortes: Mapped[Optional[str]] = mapped_column(String(255))
+    ids_fracos: Mapped[Optional[str]] = mapped_column(String(255))
+    jogador: Mapped["Jogador"] = relationship(back_populates="contexto_tatico")

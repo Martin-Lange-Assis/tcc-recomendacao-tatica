@@ -13,7 +13,8 @@ URLS = {
     'setores': f"{BASE_URL}?gid=1759049841&single=true&output=csv",
     'posicoes_ref': f"{BASE_URL}?gid=402997298&single=true&output=csv",
     'tatica': f"{BASE_URL}?gid=376444125&single=true&output=csv",
-    'arquetipos': f"{BASE_URL}?gid=1851659119&single=true&output=csv"
+    'arquetipos': f"{BASE_URL}?gid=1851659119&single=true&output=csv",
+    'deuses': f"{BASE_URL}?gid=946728303&single=true&output=csv"
 }
 
 # Dicionário de Tradução Explícito (Inglês -> EAFC Brasil)
@@ -65,7 +66,7 @@ def sincronizar_banco_de_dados():
         print("Povoando tabelas de referência...")
 
         # Lista das tabelas de referência para limpar antes de repovoar
-        tabelas_ref = ['setores_ref', 'posicoes_ref', 'arquetipos_ref']
+        tabelas_ref = ['setores_ref', 'posicoes_ref', 'arquetipos_ref', 'deuses_arquetipos']
 
         with engine.connect() as conn:
             # Desativa verificações de FK temporariamente para limpar sem erros
@@ -216,9 +217,38 @@ def sincronizar_banco_de_dados():
         # 2. Executar a remoção das colunas identificadas
         df_final_stats = df_stats.drop(columns=colunas_para_remover)
 
+        with engine.connect() as conexao:
+            conexao.execute(text("TRUNCATE TABLE estatisticas_2025;"))
+            conexao.commit()
+
         # Agora o player_id será a única "chave" enviada junto com as métricas
         df_final_stats.to_sql('estatisticas_2025', con=engine, if_exists='append', index=False)
         print("Sucesso! Dados limpos e 116 colunas integradas no MariaDB.")
+
+        # --- 5. DEUSES DOS ARQUÉTIPOS ---
+        print("Processando os atributos dos Deuses (Arquétipos)...")
+        df_deuses = pd.read_csv(URLS['deuses'], decimal=',')
+
+        # As colunas inúteis para ignorar
+        cols_para_ignorar_deuses = ['player_name', 'type', 'position', 'team_name', 'team_id', 'id', 'statisticsType',
+                                    'nome_arquetipo']
+
+        # Limpa e converte para numérico tudo que não for a coluna de ignorar E não for o id_arquetipo
+        for col in df_deuses.columns:
+            if col not in cols_para_ignorar_deuses and col != 'id_arquetipo':
+                df_deuses[col] = pd.to_numeric(df_deuses[col], errors='coerce').fillna(0)
+
+        # Remove as colunas de texto/inúteis
+        colunas_para_remover_deuses = []
+        for coluna in cols_para_ignorar_deuses:
+            if coluna in df_deuses.columns:
+                colunas_para_remover_deuses.append(coluna)
+
+        df_final_deuses = df_deuses.drop(columns=colunas_para_remover_deuses)
+
+        # Insere na nova tabela deuses_arquetipos
+        df_final_deuses.to_sql('deuses_arquetipos', con=engine, if_exists='append', index=False)
+        print("Sucesso! Deuses integrados no MariaDB.")
 
     except Exception as e:
         print(f"Erro crítico: {e}")

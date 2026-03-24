@@ -1,5 +1,5 @@
 from database import engine, Base
-import models  # IMPORTANTE: Você precisa importar o models para que o Base o conheça
+import models  #importar o models para que o Base funcione
 
 def create_tables():
     print("Criando tabelas no MariaDB...")

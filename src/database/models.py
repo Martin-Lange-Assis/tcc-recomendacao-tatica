@@ -161,7 +161,6 @@ class Estatistica2025(Base):
     outfielderBlocks: Mapped[Optional[float]] = mapped_column(Float)
     appearances: Mapped[Optional[int]] = mapped_column(Integer)
     goalsPrevented: Mapped[Optional[float]] = mapped_column(Float)
-
     jogador: Mapped["Jogador"] = relationship(back_populates="estatisticas")
 
 
@@ -184,8 +183,10 @@ class ArquetipoRef(Base):
     __tablename__ = "arquetipos_ref"
     id_arquetipo: Mapped[int] = mapped_column(primary_key=True)
     nome_arquetipo: Mapped[str] = mapped_column(String(100), nullable=False)
+    setor_alvo: Mapped[Optional[str]] = mapped_column(String(10))
     classificacoes: Mapped[List["ClassificacaoJogadores"]] = relationship(back_populates="arquetipo")
     estatisticas_deus: Mapped["DeusesArquetipos"] = relationship(back_populates="arquetipo", uselist=False)
+    posicao_alvo: Mapped[Optional[str]] = mapped_column(String(50))
 
 class ClassificacaoJogadores(Base):
     __tablename__ = "classificacao_jogadores"

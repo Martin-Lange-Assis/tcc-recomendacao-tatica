@@ -3,21 +3,24 @@ import numpy as np
 from sqlalchemy import text
 from database import engine, SessionLocal
 from models import Jogador, Estatistica2025, SetorRef, PosicaoRef, ArquetipoRef, CaracteristicaTatica
+from src.classification.classificacao_jogadores import calcular_similaridade_arquetipos
 
 # --- CONFIGURAÇÃO DE URLs ---
-BASE_URL = "LINK"
+BASE_URL = "base"
 
 URLS = {
-    'geral': f"{BASE_URL}?gid=140211115&single=true&output=csv",
-    'stats': f"{BASE_URL}?gid=1068403530&single=true&output=csv",
-    'setores': f"{BASE_URL}?gid=1759049841&single=true&output=csv",
-    'posicoes_ref': f"{BASE_URL}?gid=402997298&single=true&output=csv",
-    'tatica': f"{BASE_URL}?gid=376444125&single=true&output=csv",
-    'arquetipos': f"{BASE_URL}?gid=1851659119&single=true&output=csv",
-    'deuses': f"{BASE_URL}?gid=946728303&single=true&output=csv"
+    'geral': f"geral",
+    'stats': f"stats",
+    'setores': f"setores",
+    'posicoes_ref': f"posicoes",
+    'tatica': f"tatica",
+    'arquetipos': f"arq",
+    'deuses': f"deuses"
 }
 
-# Dicionário de Tradução Explícito (Inglês -> EAFC Brasil)
+caminho_json = r"caminho"
+
+# Dicionário de Tradução Explícito (Inglês -> EAFC 2026)
 TRADUCAO_POSICOES = {
     'GK': 'GL',    # Goleiro
     'DR': 'LD',    # Lateral-Direito
@@ -34,7 +37,6 @@ TRADUCAO_POSICOES = {
 }
 
 MAPA_SETORES = {'F': 'Ataque', 'M': 'Meio', 'D': 'Defesa', 'G': 'Gol'}
-
 
 def limpar_valor(val, tipo_func):
     if pd.isna(val):
@@ -57,6 +59,24 @@ def traduzir_posicao_eafc(sigla_en):
         termo_traduzido = TRADUCAO_POSICOES.get(pos, pos)
         posicoes_traduzidas.append(termo_traduzido)
     return ", ".join(posicoes_traduzidas)
+
+def salvar_classificacao_jogadores(df_jogadores_classificados):
+    """
+    Recebe o DataFrame com as similaridades calculadas e insere no banco.
+    """
+    print("Salvando classificações de similaridade no banco de dados...")
+    try:
+        with engine.connect() as conexao:
+            # Limpa a tabela antes de inserir os novos cálculos
+            conexao.execute(text("TRUNCATE TABLE classificacao_jogadores;"))
+            conexao.commit()
+
+        # Insere os dados novos
+        df_jogadores_classificados.to_sql('classificacao_jogadores', con=engine, if_exists='append', index=False)
+        print("Sucesso! Classificação dos jogadores salva no MariaDB.")
+
+    except Exception as e:
+        print(f"Erro crítico ao salvar a classificação: {e}")
 
 
 def sincronizar_banco_de_dados():
@@ -115,7 +135,7 @@ def sincronizar_banco_de_dados():
                     pais = "Brazil"
 
                 # 4. Construção da URL de imagem
-                url_foto = "https://api.sofascore.app/api/v1/player/" + str(player_id_planilha) + "/image"
+                url_foto = "url_foto"
 
                 # 5. Instanciação do objeto com variáveis limpas
                 jogador = Jogador(
@@ -171,8 +191,8 @@ def sincronizar_banco_de_dados():
                 siglas = []
                 partes_da_posicao = pos_traduzida.split(',')
 
-                for s in partes_da_posicao:
-                    sigla_limpa = s.strip()
+                for sig in partes_da_posicao:
+                    sigla_limpa = sig.strip()
                     siglas.append(sigla_limpa)
 
                 for sigla in siglas:
@@ -256,6 +276,17 @@ def sincronizar_banco_de_dados():
     finally:
         db.close()
 
+
 # --- BLOCO PRINCIPAL DE EXECUÇÃO ---
 if __name__ == "__main__":
+    # 1. Primeiro atualiza as tabelas base (Jogadores, Stats, Deuses)
     sincronizar_banco_de_dados()
+
+    # 2. Com os dados novos no banco, chama a função para calcular
+    print("\nIniciando cálculo de similaridade de arquétipos...")
+    df_classificados = calcular_similaridade_arquetipos(caminho_json)
+
+    # 3. Finalmente, salva os cálculos na tabela classificacao_jogadores
+    salvar_classificacao_jogadores(df_classificados)
+
+    print("\nProcesso completo finalizado com sucesso!")

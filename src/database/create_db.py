@@ -1,5 +1,5 @@
-from database import engine, Base
-import models  #importar o models para que o Base funcione
+from .database import engine, Base
+from . import models  #importar o models para que o Base funcione
 
 def create_tables():
     print("Criando tabelas no MariaDB...")

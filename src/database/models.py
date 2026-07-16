@@ -2,7 +2,7 @@ from typing import List, Optional
 from datetime import datetime
 from sqlalchemy import ForeignKey, String, Float, Integer, BigInteger, Table, Column, DateTime, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from database import Base
+from src.database.database import Base
 
 # --- Tabelas de Associação (N:M) ---
 jogador_posicao = Table(
@@ -324,3 +324,20 @@ class DeusesArquetipos(Base):
     goalsPrevented: Mapped[Optional[float]] = mapped_column(Float)
 
     arquetipo: Mapped["ArquetipoRef"] = relationship(back_populates="estatisticas_deus")
+
+class EscalacaoPartida(Base):
+    __tablename__ = "escalacoes_partidas"
+
+    id_escalacao: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    rodada: Mapped[int] = mapped_column(Integer)
+    jogo_id: Mapped[int] = mapped_column(Integer)
+    player_id: Mapped[int] = mapped_column(ForeignKey("jogadores.player_id"))
+    time_lado: Mapped[str] = mapped_column(String(10))
+    resultado_time: Mapped[Optional[str]] = mapped_column(String(20))
+    formacao: Mapped[Optional[str]] = mapped_column(String(20))
+    nome_jogador: Mapped[str] = mapped_column(String(150))
+    posicao_jogo: Mapped[str] = mapped_column(String(10))
+    camisa: Mapped[Optional[str]] = mapped_column(String(10))
+    status_jogo: Mapped[str] = mapped_column(String(50))
+
+    jogador: Mapped["Jogador"] = relationship()

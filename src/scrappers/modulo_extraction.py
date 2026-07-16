@@ -6,13 +6,15 @@ def modulo_extracao():
     import os
     import json
     from datetime import datetime
-    from conectar_google_api import salvar_dataframe
-    from conversor_jsonl import processar_conversao
+    from src.scrappers.conectar_google_api import salvar_dataframe
 
-    # --- CONFIGURAÇÃO ---
-    ARQUIVO_ENTRADA = 'caminho'
-    ARQUIVO_SAIDA = 'caminho'
-    SPREADSHEET_ID = "id"
+    # Configurações de diretórios e parâmetros da API
+    PASTA_PROJETO = 'PASTA_PROJETO'
+    ARQUIVO_ENTRADA = f'ARQUIVO_ENTRADA'
+    ARQUIVO_BRUTO = f'ARQUIVO_BRUTO'
+    ARQUIVO_CSV_FINAL = f'ARQUIVO_CSV_FINAL'
+
+    SPREADSHEET_ID = "SPREADSHEET_ID"
 
     ID_TORNEIO = 325
     ID_SEASON = 72034
@@ -22,24 +24,15 @@ def modulo_extracao():
         'accept': '*/*',
         'referer': 'https://www.sofascore.com/pt/torneio/futebol/brazil/brasileirao-serie-a/325',
         'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-        'x-requested-with': 'x',
-        'cookie': 'cookie',
+
     }
 
-    # --- SISTEMA DE LOGS ---
     lista_erros = []
 
     def registrar_erro(tipo, mensagem, alvo):
-        """
-        Padroniza o registro de erros
-
-        Args:
-            tipo (str): tipo do erro.
-            mensagem (str): mensagem do erro.
-            alvo (str, opcional): alvo do erro. Por padrão pode ser "N/A".
-        """
+        """Registra erros de execução com timestamp, contexto e mensagem detalhada."""
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        print(f"⚠️ [{tipo}] {alvo}: {mensagem}")
+        print(f"[{tipo}] {alvo}: {mensagem}")
         lista_erros.append({
             "Data_Hora": timestamp,
             "Script": "Extrator de Stats",
@@ -49,92 +42,101 @@ def modulo_extracao():
         })
 
     def salvar_logs_nuvem():
-        """Envia os erros acumulados para o Google Sheets"""
+        """Exporta a lista de erros acumulados para uma planilha no Google Sheets."""
         if lista_erros and salvar_dataframe:
-            print("\nEnviando relatório de erros para o Google Sheets...")
+            print("\nExportando logs de erro para o Google Sheets...")
             df_erros = pd.DataFrame(lista_erros)
             salvar_dataframe(df_erros, SPREADSHEET_ID, "Log_Erros_Estatísticas_dos_Atletas")
 
-    # --- NOVO: FUNÇÃO DE RETRY (Blindada) ---
+    def gerar_csv_e_enviar_sheets():
+        """Lê os dados brutos, organiza, salva em CSV e envia para a nuvem."""
+        print("\n[Processamento Final] Gerando CSV e enviando para o Sheets...")
+        if not os.path.exists(ARQUIVO_BRUTO):
+            print("Aviso: Nenhum dado bruto encontrado para converter.")
+            return
+
+        try:
+            # Lê o arquivo bruto montado durante a extração
+            df = pd.read_json(ARQUIVO_BRUTO, lines=True, convert_dates=False)
+
+            # Organiza as colunas principais na frente
+            colunas_fixas = ['player_id', 'player_name', 'team_id']
+            outras_colunas = [c for c in df.columns if c not in colunas_fixas]
+            ordem_final = colunas_fixas + outras_colunas
+
+            # Limpa, organiza e padroniza para texto
+            df = df[ordem_final].fillna('').astype(str)
+
+            # Salva o arquivo final CSV no computador
+            df.to_csv(ARQUIVO_CSV_FINAL, index=False, sep=';', encoding='utf-8-sig')
+            print(f"[Local] CSV salvo com sucesso em: {ARQUIVO_CSV_FINAL}")
+
+            # Manda a tabela estruturada para o Sheets
+            if salvar_dataframe:
+                print(f"[Nuvem] Subindo dados para a aba 'tabela_final_stats_2025' no Sheets...")
+                salvar_dataframe(df, SPREADSHEET_ID, "tabela_final_stats_2025")
+
+        except Exception as e:
+            print(f"Erro ao gerar o CSV ou enviar para o Sheets: {e}")
+
     def faz_requisicao(url, headers_req, tentativas=5, espera=3):
-        """
-        Tenta fazer a requisição X vezes antes de desistir
-
-        Args:
-            url: url da requisição
-            headers_req: cabeçalhos da requisição
-            tentativas: nº de vezes que o algoritmo tentará requisitar antes de desistir
-            espera: o algoritmo espera 3 segundos antes de fazer uma nova tentativa
-
-        Returns:
-            resposta_da_requisicao: A requisição foi um sucesso e o dado pôde ser raspado
-            None: A requisição não funcionou e mesmo após 5 tentativas o algoritmo não retornou com sucesso.
-            Nesse caso, ele desiste e parte para o próximo item.
-
-        """
-
+        """Realiza requisições HTTP com política de repetição (retry)."""
         for i in range(tentativas):
             try:
-                # Importante: Passamos os headers dinâmicos aqui
                 resposta_da_requisicao = requests.get(url, headers=headers_req, impersonate="chrome")
 
-                # Se for sucesso (200) ou Não Encontrado (404 - erro definitivo), retorna logo
                 if resposta_da_requisicao.status_code in [200, 404, 403]:
                     return resposta_da_requisicao
 
-                # Se for erro 5xx ou outro, tenta de novo
-                print(f"Tentativa {i + 1}/{tentativas} falhou (Status {resposta_da_requisicao.status_code})...", end=" ")
-
+                print(f"Tentativa {i + 1}/{tentativas} falhou (Status {resposta_da_requisicao.status_code})...",
+                      end=" ")
             except Exception as e:
                 print(f"Tentativa {i + 1}/{tentativas} falhou (Erro {e})...", end=" ")
 
-            # Aguarda antes da próxima, menos na última
             if i < tentativas - 1:
                 time.sleep(espera)
 
-        # Se saiu do loop, é porque falhou todas
         return None
 
-        # --- 1. CARREGAR OS JOGADORES ---
-
-    print(f"Lendo {ARQUIVO_ENTRADA}...")
+    # Leitura do arquivo de entrada e verificação de integridade
+    print(f"Lendo base de dados em: {ARQUIVO_ENTRADA}...")
     try:
         df_jogadores = pd.read_csv(ARQUIVO_ENTRADA, sep=';')
         if 'slug' not in df_jogadores.columns:
-            registrar_erro("Setup", "CSV sem a coluna 'slug'", ARQUIVO_ENTRADA)
-            exit()
+            registrar_erro("Setup", "Arquivo CSV não possui a coluna 'slug'", ARQUIVO_ENTRADA)
+            return
     except FileNotFoundError:
-        print("Erro: Arquivo de entrada não encontrado.")
-        exit()
+        print("Erro Crítico: Arquivo de entrada não localizado.")
+        return
 
-    # Descobrir onde paramos
+    # Mapeamento do progresso atual para evitar duplicidade na extração
     ids_processados = set()
-    if os.path.exists(ARQUIVO_SAIDA):
-        with open(ARQUIVO_SAIDA, 'r', encoding='utf-8') as f:
+    if os.path.exists(ARQUIVO_BRUTO):
+        with open(ARQUIVO_BRUTO, 'r', encoding='utf-8') as f:
             for linha in f:
                 try:
                     dado = json.loads(linha)
                     ids_processados.add(dado['player_id'])
                 except:
                     pass
-        print(f"Retomando: {len(ids_processados)} jogadores já coletados.")
+        print(f"Retomando operação: {len(ids_processados)} jogadores já constam na base.")
 
-    # --- 2. LOOP DE MINERAÇÃO ---
-    print(">>> Iniciando coleta...")
+    print("Iniciando extração de dados...")
 
     try:
-        with open(ARQUIVO_SAIDA, 'a', encoding='utf-8') as f_saida:
+        # Abre o arquivo bruto em modo 'append' (adiciona linhas novas sem apagar o resto)
+        with open(ARQUIVO_BRUTO, 'a', encoding='utf-8') as f_saida:
             for index, row in df_jogadores.iterrows():
                 player_id = row['id']
                 player_name = row['name']
                 player_slug = row['slug']
 
+                # Pula jogadores que já foram raspados na execução anterior
                 if player_id in ids_processados:
                     continue
 
-                print(f"[{index + 1}/{len(df_jogadores)}] {player_name}...", end="")
+                print(f"[{index + 1}/{len(df_jogadores)}] Extraindo {player_name}...", end="")
 
-                # Referer Dinâmico (Muda a cada jogador)
                 url_perfil_fake = f"https://www.sofascore.com/pt/football/player/{player_slug}/{player_id}"
                 headers['referer'] = url_perfil_fake
 
@@ -142,56 +144,53 @@ def modulo_extracao():
 
                 resp = faz_requisicao(url_stats, headers, tentativas=5, espera=3)
 
-                if resp:  # Se houve resposta (mesmo que erro)
+                if resp:
                     if resp.status_code == 200:
                         try:
                             data = resp.json()
                             stats = data.get('statistics', {})
 
-                            # Metadados
+                            # Inserção de metadados
                             stats['player_id'] = player_id
                             stats['player_name'] = player_name
                             stats['team_id'] = row['time_id']
 
-                            # Salva JSONL Local
+                            # Gravação no arquivo temporário bruto
                             json.dump(stats, f_saida, ensure_ascii=False)
                             f_saida.write('\n')
                             f_saida.flush()
-                            print(" Sucesso!")
+                            print(" Sucesso.")
                         except Exception as e:
-                            print(f" Erro JSON: {e}")
-                            registrar_erro("Parse JSON", f"Erro ao ler JSON: {e}", player_name)
+                            print(f" Erro de parsing JSON: {e}")
+                            registrar_erro("Parse JSON", f"Erro na leitura do JSON: {e}", player_name)
 
                     elif resp.status_code == 404:
-                        print(" Sem dados (404).")
-                        # Opcional: talvez ainda seja feito um registrar_erro("Aviso 404", "Sem dados na temporada", player_name)
+                        print(" Dados não encontrados (Erro 404).")
 
                     elif resp.status_code == 403:
-                        msg = "ERRO 403: Bloqueio detectado! Pare e troque o Cookie."
-                        registrar_erro("FATAL", msg, player_name)
-                        break  # BLOQUEIO É FATAL -> PARE O SCRIPT
+                        msg = "Acesso negado (Erro 403): Bloqueio detectado pela API. Atualize o Cookie."
+                        registrar_erro("Erro Fatal", msg, player_name)
+                        break
 
                     else:
-                        registrar_erro("HTTP Error", f"Falha após 5 tentativas. Status {resp.status_code}", player_name)
+                        registrar_erro("Erro HTTP", f"Falha esgotando as 5 tentativas. Status {resp.status_code}",
+                                       player_name)
 
                 else:
-                    # Se resp for None, significa que deu exceção nas 5 tentativas
-                    print(" Falha Total.")
-                    registrar_erro("Conexão", "Falha de conexão após 5 tentativas", player_name)
+                    print(" Falha de conexão.")
+                    registrar_erro("Conexão", "Esgotamento do limite de tentativas de requisição", player_name)
 
                 time.sleep(random.uniform(2.0, 4.0))
 
     except KeyboardInterrupt:
-        print("\nInterrompido pelo usuário.")
+        print("\nProcesso interrompido manualmente pelo usuário.")
 
     finally:
-        # --- BLOCO FINAL ---
-        print("\nProcessando conversão final...")
-        try:
-            processar_conversao()
-        except Exception as e:
-            print(f"Erro na conversão automática: {e}")
+        print("\nIniciando rotina de encerramento...")
 
-        time.sleep(5)
+        # Aqui o script faz tudo o que o conversor fazia, direto no pipeline principal:
+        gerar_csv_e_enviar_sheets()
+
+        time.sleep(2)
         salvar_logs_nuvem()
-        print("Script finalizado.")
+        print("Script finalizado com sucesso.")

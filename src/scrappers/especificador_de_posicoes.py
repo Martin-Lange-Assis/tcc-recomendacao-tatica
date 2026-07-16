@@ -1,132 +1,107 @@
 def especificador_posicoes():
-    from curl_cffi import requests
-    import pandas as pd
     import time
     import random
     from datetime import datetime
+    import pandas as pd
+    from curl_cffi import requests
     from conectar_google_api import salvar_dataframe
 
-    # --- CONFIGURAÇÃO ---
-    PASTA_PROJETO = 'caminho'
-    ARQUIVO_ENTRADA = f'{PASTA_PROJETO}/jogadores_brasileirao_2025.csv'
-    ARQUIVO_SAIDA = f'{PASTA_PROJETO}/jogadores_posicoes_detalhadas.csv'
+    # Configurações de diretórios e arquivos locais
+    PASTA_PROJETO = 'PASTA_PROJETO'
+    ARQUIVO_ENTRADA = f'ARQUIVO_ENTRADA'
+    ARQUIVO_SAIDA = f'ARQUIVO_SAIDA'
 
-    # Configure seu ID aqui
-    SPREADSHEET_ID = "id"
+    # Credenciais e IDs de integração
+    SPREADSHEET_ID = "SPREADSHEET_ID"
 
+    # Cabeçalhos padrão para emulação de navegador
     headers = {
         'authority': 'www.sofascore.com',
         'accept': '*/*',
         'referer': 'https://www.sofascore.com/',
         'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-        'x-requested-with': 'x',
-        'cookie': 'cookie',
+
     }
 
-    # --- SISTEMA DE LOGS ---
+    # Armazenamento de logs em memória
     lista_erros = []
 
     def registrar_erro(contexto, mensagem, alvo="N/A"):
         """
-        Padroniza o registro de erros
-
-        Args:
-            contexto (str): contexto do erro.
-            mensagem (str): mensagem do erro.
-            alvo (str, opcional): alvo do erro. Por padrão pode ser "N/A".
+        Registra exceções e falhas de execução em uma estrutura de dicionário para posterior exportação.
         """
-
         erro_encontrado = {
             "Data_Hora": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "Contexto": contexto,
             "Alvo": alvo,
             "Mensagem_Erro": str(mensagem)
         }
-
-        lista_erros.append(erro_encontrado)  # Adiciona na lista de erros
-        print(f"Foi encontrado um erro com a mensagem {mensagem}. Já adicionei na lista de erros")
+        lista_erros.append(erro_encontrado)
+        print(f"[LOG] Erro registrado: {mensagem} | Contexto: {contexto}")
 
     def finalizar_execucao(dados_coletados):
         """
-        Salva tudo (Dados e Logs) localmente e na nuvem para finalizar a execução
-
-        Args:
-            dados_coletados: lista contendo os dados táticos que foram raspados e processados
-
-        Returns:
-            None: A função não retorna valores, apenas realiza a persistência dos dados (CSV e Google Sheets) e logs de erro
+        Realiza a persistência final dos dados coletados e logs gerados,
+        salvando os resultados localmente em CSV e remotamente via Google Sheets.
         """
-        print("\nFinalizando e salvando dados...")
+        print("\n[SISTEMA] Iniciando processo de salvamento de dados...")
 
-        # 1. Salvar Dados (CSV Local)
+        # Persistência de dados coletados
         if dados_coletados:
             df_out = pd.DataFrame(dados_coletados)
             df_out.to_csv(ARQUIVO_SAIDA, index=False, sep=';', encoding='utf-8-sig')
-            print(f"CSV Tático salvo: {ARQUIVO_SAIDA}")
+            print(f"[SISTEMA] CSV exportado com sucesso: {ARQUIVO_SAIDA}")
 
-            # 2. Salvar Dados (Nuvem)
             if salvar_dataframe:
-                print("Enviando Características para o Google Sheets...")
+                print("[SISTEMA] Sincronizando Características Táticas com Google Sheets...")
                 salvar_dataframe(df_out, SPREADSHEET_ID, "Características_Táticas")
         else:
-            print("Nenhum dado tático coletado.")
+            print("[SISTEMA] Nenhum dado tático disponível para exportação.")
 
-        # 3. Salvar Logs de Erro (Nuvem)
+        # Persistência de logs de erro
         if lista_erros and salvar_dataframe:
-            print("Enviando Logs de erro...")
+            print("[SISTEMA] Sincronizando Logs de Erro com Google Sheets...")
             df_erros = pd.DataFrame(lista_erros)
             salvar_dataframe(df_erros, SPREADSHEET_ID, "Log_Erros_Taticos")
 
     def faz_requisicao(url, headers_req, contexto="", tentativas=5, espera=3):
         """
-        Tenta fazer a requisição X vezes antes de desistir
-
-        Args:
-            url: url da requisição
-            headers_req: cabeçalhos para simular o navegador (ex: user-agent)
-            contexto: texto para identificar nos logs o que está sendo baixado (ex: nome do jogador)
-            tentativas: número máximo de vezes que o código tentará conectar
-            espera: tempo em segundos de aguardo entre uma falha e a próxima tentativa
-
-        Returns:
-            resp: O objeto da resposta se o status for 200 (sucesso), 404 (não encontrado) ou 403 (bloqueado)
-            None: A requisição não funcionou e mesmo após as tentativas o algoritmo não retornou.
-            Nesse caso, ele desiste da URL.
+        Executa chamadas HTTP com política de retry para mitigação de falhas de rede ou bloqueios temporários.
         """
         for i in range(tentativas):
             try:
                 resp = requests.get(url, headers=headers_req, impersonate="chrome")
 
-                # Se for sucesso (200), 404 (não existe) ou 403 (bloqueio), retorna
+                # Códigos de retorno aceitos para processamento
                 if resp.status_code in [200, 404, 403]:
                     return resp
 
-                # Se falhar, pula linha e avisa qual jogador deu erro
                 print(
-                    f"\n{contexto} -> Tentativa {i + 1}/{tentativas} falhou (Status {resp.status_code})... Tentando de novo em {espera}s.")
+                    f"[RETRY] {contexto} -> Tentativa {i + 1}/{tentativas} retornou Status {resp.status_code}. Aguardando {espera}s.")
 
             except Exception as e:
-                # Tratamento para erro de DNS/Internet (seu erro curl 6)
+                # Captura falhas de resolução de DNS ou indisponibilidade de rede
                 print(
-                    f"\n{contexto} -> Tentativa {i + 1}/{tentativas} falhou (Erro de Conexão). Aguardando {espera}s...")
+                    f"[RETRY] {contexto} -> Tentativa {i + 1}/{tentativas} falhou (Erro de Conexão). Aguardando {espera}s.")
 
             if i < tentativas - 1:
                 time.sleep(espera)
 
-        return None  # Falhou todas
+        return None
 
-    # --- INÍCIO ---
-    print(f"Lendo {ARQUIVO_ENTRADA}...")
+    # --- FLUXO PRINCIPAL DE EXECUÇÃO ---
+    print(f"[SISTEMA] Carregando base de entrada: {ARQUIVO_ENTRADA}")
     try:
         df_jogadores = pd.read_csv(ARQUIVO_ENTRADA, sep=';')
     except FileNotFoundError:
-        print("Erro: CSV de entrada não encontrado. Rode o primeiro script antes.")
+        print("[ERRO FATAL] Arquivo CSV de entrada ausente. Verifique a execução do script anterior.")
         exit()
 
     dados_finais = []
-    print(">>> Buscando características táticas...")
+    print("[SISTEMA] Iniciando coleta de características táticas...")
 
     try:
+        # Iteração padrão mantida conforme solicitação
         for index, row in df_jogadores.iterrows():
             pid = row['id']
             nome = row['name']
@@ -134,14 +109,13 @@ def especificador_posicoes():
 
             url = f"https://www.sofascore.com/api/v1/player/{pid}/characteristics"
 
-            # Header Referer dinâmico
+            # Atualização dinâmica do Referer
             headers['referer'] = f"https://www.sofascore.com/pt/football/player/{slug}/{pid}"
 
             try:
-                # Pausa antes de começar
+                # Rate limiting (delay aleatório)
                 time.sleep(random.uniform(1.0, 2.0))
 
-                # --- CHAMADA COM RETRY ---
                 resp = faz_requisicao(url, headers, contexto=f"[{index}] {nome}")
 
                 item = {
@@ -152,28 +126,17 @@ def especificador_posicoes():
                     'ids_fracos': ''
                 }
 
-                if resp:  # Se houve resposta
+                if resp:
                     if resp.status_code == 200:
                         data = resp.json()
 
-                        # 1. Posições
+                        # Extração de Posições
                         lista_pos = data.get('positions', [])
                         item['posicoes_detalhadas'] = ", ".join(lista_pos)
 
-                        # 2. Pontos Fortes e Fracos
-                        fortes = []
-                        positivos = data.get('positive', [])
-
-                        for x in positivos:
-                            valor = x.get('type')
-                            fortes.append(str(valor))
-
-                        fracos = []
-                        negativos = data.get('negative', [])
-
-                        for x in negativos:
-                            valor = x.get('type')
-                            fracos.append(str(valor))
+                        # Extração de Pontos Fortes e Fracos
+                        fortes = [str(x.get('type')) for x in data.get('positive', [])]
+                        fracos = [str(x.get('type')) for x in data.get('negative', [])]
 
                         item['ids_fortes'] = ", ".join(fortes)
                         item['ids_fracos'] = ", ".join(fracos)
@@ -182,27 +145,26 @@ def especificador_posicoes():
                         dados_finais.append(item)
 
                     elif resp.status_code == 404:
-                        print(f"[{index}] {nome}: Sem dados táticos (404).")
-                        dados_finais.append(item)  # Salva vazio
+                        print(f"[{index}] {nome}: Status 404 (Dados Inexistentes).")
+                        dados_finais.append(item)
 
                     elif resp.status_code == 403:
-                        registrar_erro("FATAL", "Bloqueio 403 detectado", nome)
-                        break  # Encerra o loop para salvar o que já temos
+                        registrar_erro("FATAL", "Bloqueio de acesso 403 (Forbidden) detectado", nome)
+                        break
 
                     else:
-                        registrar_erro("HTTP", f"Status {resp.status_code}", nome)
+                        registrar_erro("HTTP", f"Status não mapeado: {resp.status_code}", nome)
 
                 else:
-                    # Falhou as 5 tentativas
-                    print(f"[{index}] {nome}: Falha Total de Conexão.")
-                    registrar_erro("Conexão", "Falha após 5 tentativas", nome)
+                    print(f"[{index}] {nome}: Timeout (Esgotamento de tentativas).")
+                    registrar_erro("Conexão", "Falha de conexão persistente após retries", nome)
 
             except Exception as e:
                 registrar_erro("Exceção Loop", str(e), nome)
 
     except KeyboardInterrupt:
-        print("\nInterrupção manual.")
+        print("\n[SISTEMA] Processo interrompido pelo usuário (KeyboardInterrupt).")
 
     finally:
-        # Garante que salva tudo mesmo se der erro no meio
+        # Bloco de segurança para garantia de persistência
         finalizar_execucao(dados_finais)

@@ -2,7 +2,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 
 # 1. String de conexão para MariaDB (ajuste user, senha e db_name)
-SQLALCHEMY_DATABASE_URL = "mariadb+pymysql://user:senha@localhost:3306/bd"
+SQLALCHEMY_DATABASE_URL = "mariadb+pymysql://user:senha@localhost:3306/db_name"
 
 # 2. O Engine é quem realmente faz o trabalho de baixo nível
 engine = create_engine(SQLALCHEMY_DATABASE_URL)

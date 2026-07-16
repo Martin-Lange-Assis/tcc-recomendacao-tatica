@@ -1,52 +1,51 @@
 import pandas as pd
 import numpy as np
 from sqlalchemy import text
-from database import engine, SessionLocal
-from models import Jogador, Estatistica2025, SetorRef, PosicaoRef, ArquetipoRef, CaracteristicaTatica
+from src.database.database import engine, SessionLocal
+from src.database.models import Jogador, Estatistica2025, SetorRef, PosicaoRef, ArquetipoRef, CaracteristicaTatica
 from src.classification.classificacao_jogadores import calcular_similaridade_arquetipos
+from src.database.repository import refinar_formacao_tatica
 
-# --- CONFIGURAÇÃO DE URLs ---
-BASE_URL = "base"
+BASE_URL = "BASE_URL"
 
 URLS = {
-    'geral': f"geral",
-    'stats': f"stats",
-    'setores': f"setores",
-    'posicoes_ref': f"posicoes",
-    'tatica': f"tatica",
-    'arquetipos': f"arq",
-    'deuses': f"deuses"
+    'geral': f"{BASE_URL}?gid=geral=csv",
+    'stats': f"{BASE_URL}?gid=stats=csv",
+    'setores': f"{BASE_URL}?gid=setores=csv",
+    'posicoes_ref': f"{BASE_URL}?gid=posicoes_ref=csv",
+    'tatica': f"{BASE_URL}?gid=tatica=csv",
+    'arquetipos': f"{BASE_URL}?gid=arquetipos=csv",
+    'deuses': f"{BASE_URL}?gid=deuses=csv",
+    'escalacoes': f"{BASE_URL}?gid=escalacoes=csv"
 }
 
-caminho_json = r"caminho"
-
-# Dicionário de Tradução Explícito (Inglês -> EAFC 2026)
 TRADUCAO_POSICOES = {
-    'GK': 'GL',    # Goleiro
-    'DR': 'LD',    # Lateral-Direito
-    'DL': 'LE',    # Lateral-Esquerdo
-    'DC': 'ZAG',   # Zagueiro
-    'DM': 'VOL',   # Volante
-    'MC': 'MC',    # Meio-Campista
-    'MR': 'MD',    # Meia-Direita
-    'ML': 'ME',    # Meia-Esquerda
-    'AM': 'MEI',   # Meia-Ofensivo
-    'RW': 'PD',    # Ponta-Direita
-    'LW': 'PE',    # Ponta-Esquerda
-    'ST': 'ATA',   # Atacante
+    'GK': 'GL',
+    'DR': 'LD',
+    'DL': 'LE',
+    'DC': 'ZAG',
+    'DM': 'VOL',
+    'MC': 'MC',
+    'MR': 'MD',
+    'ML': 'ME',
+    'AM': 'MEI',
+    'RW': 'PD',
+    'LW': 'PE',
+    'ST': 'ATA',
 }
 
 MAPA_SETORES = {'F': 'Ataque', 'M': 'Meio', 'D': 'Defesa', 'G': 'Gol'}
 
+
 def limpar_valor(val, tipo_func):
+    """Trata nulos antes de converter o tipo."""
     if pd.isna(val):
         return None
-
     return tipo_func(val)
 
 
 def traduzir_posicao_eafc(sigla_en):
-    """Traduz siglas do inglês para o padrão EAFC 26."""
+    """Traduz siglas de posição para o padrão BR."""
     if pd.isna(sigla_en) or sigla_en == "":
         return None
 
@@ -58,51 +57,55 @@ def traduzir_posicao_eafc(sigla_en):
     for pos in partes:
         termo_traduzido = TRADUCAO_POSICOES.get(pos, pos)
         posicoes_traduzidas.append(termo_traduzido)
+
     return ", ".join(posicoes_traduzidas)
 
+
 def salvar_classificacao_jogadores(df_jogadores_classificados):
-    """
-    Recebe o DataFrame com as similaridades calculadas e insere no banco.
-    """
+    """Salva os scores de similaridade no banco."""
     print("Salvando classificações de similaridade no banco de dados...")
+
+    # Ajusta colunas pro formato da tabela
+    df_para_banco = df_jogadores_classificados[['ID do jogador', 'ID do Arquetipo', 'Score de Similaridade']].copy()
+    df_para_banco = df_para_banco.rename(columns={
+        'ID do jogador': 'player_id',
+        'ID do Arquetipo': 'id_arquetipo',
+        'Score de Similaridade': 'score_similaridade'
+    })
+
     try:
         with engine.connect() as conexao:
-            # Limpa a tabela antes de inserir os novos cálculos
             conexao.execute(text("TRUNCATE TABLE classificacao_jogadores;"))
             conexao.commit()
 
-        # Insere os dados novos
-        df_jogadores_classificados.to_sql('classificacao_jogadores', con=engine, if_exists='append', index=False)
-        print("Sucesso! Classificação dos jogadores salva no MariaDB.")
+        df_para_banco.to_sql('classificacao_jogadores', con=engine, if_exists='append', index=False)
+        print("Sucesso! Classificação dos jogadores salva no banco.")
 
     except Exception as e:
-        print(f"Erro crítico ao salvar a classificação: {e}")
+        print(f"Erro ao salvar a classificação: {e}")
 
 
 def sincronizar_banco_de_dados():
+    """Pipeline principal de extração, limpeza e carga no banco."""
     db = SessionLocal()
     try:
-        # --- 1. REFERÊNCIAS (Lógica Anti-Duplicata) ---
+        # Tabelas de referência
         print("Povoando tabelas de referência...")
-
-        # Lista das tabelas de referência para limpar antes de repovoar
         tabelas_ref = ['setores_ref', 'posicoes_ref', 'arquetipos_ref', 'deuses_arquetipos']
 
         with engine.connect() as conn:
-            # Desativa verificações de FK temporariamente para limpar sem erros
             conn.execute(text("SET FOREIGN_KEY_CHECKS = 0;"))
             for tabela in tabelas_ref:
                 conn.execute(text(f"TRUNCATE TABLE {tabela};"))
             conn.execute(text("SET FOREIGN_KEY_CHECKS = 1;"))
             conn.commit()
 
-        # Agora insere normalmente, sem risco de ID duplicado
         pd.read_csv(URLS['setores']).to_sql('setores_ref', engine, if_exists='append', index=False)
         pd.read_csv(URLS['posicoes_ref']).to_sql('posicoes_ref', engine, if_exists='append', index=False)
         pd.read_csv(URLS['arquetipos']).to_sql('arquetipos_ref', engine, if_exists='append', index=False)
 
-        # --- 2. JOGADORES ---
-        print("Cadastrando jogadores e vinculando setores...")
+        # Upsert de jogadores
+        print("Cadastrando e atualizando jogadores...")
         df_geral = pd.read_csv(URLS['geral'])
         df_geral.columns = df_geral.columns.str.strip()
         df_geral = df_geral.dropna(subset=['position'])
@@ -111,33 +114,19 @@ def sincronizar_banco_de_dados():
             player_id_planilha = int(row['id'])
             jogador = db.query(Jogador).filter_by(player_id=player_id_planilha).first()
 
+            # Dados base do jogador
+            nome = str(row['name'])
+            slug = str(row['slug'])
+            posicao = str(row['position'])
+            altura = limpar_valor(row['height'], float)
+            nascimento = limpar_valor(row['dateOfBirthTimestamp'], float)
+            id_time = int(row['time_id'])
+            nome_time = str(row['time_nome'])
+            pe_preferido = str(row['preferredFoot']) if pd.notna(row['preferredFoot']) else "N/A"
+            pais = str(row['country.name']) if 'country.name' in row else "Brazil"
+            url_foto = f"https://img.sofascore.com/api/v1/player/{player_id_planilha}/image"
+
             if not jogador:
-
-                # 1. Preparação dos dados (extração e limpeza)
-                nome = str(row['name'])
-                slug = str(row['slug'])
-                posicao = str(row['position'])
-                altura = limpar_valor(row['height'], float)
-                nascimento = limpar_valor(row['dateOfBirthTimestamp'], float)
-                id_time = int(row['time_id'])
-                nome_time = str(row['time_nome'])
-
-                # 2. Lógica condicional explícita para o pé preferido
-                if pd.notna(row['preferredFoot']):
-                    pe_preferido = str(row['preferredFoot'])
-                else:
-                    pe_preferido = "N/A"
-
-                # 3. Lógica condicional explícita para o país
-                if 'country.name' in row:
-                    pais = str(row['country.name'])
-                else:
-                    pais = "Brazil"
-
-                # 4. Construção da URL de imagem
-                url_foto = "url_foto"
-
-                # 5. Instanciação do objeto com variáveis limpas
                 jogador = Jogador(
                     player_id=player_id_planilha,
                     name=nome,
@@ -152,18 +141,31 @@ def sincronizar_banco_de_dados():
                     url_imagem=url_foto
                 )
                 db.add(jogador)
-                db.flush()
+            else:
+                jogador.name = nome
+                jogador.slug = slug
+                jogador.posicao_bruta = posicao
+                jogador.height = altura
+                jogador.preferredFoot = pe_preferido
+                jogador.dateOfBirthTimestamp = nascimento
+                jogador.country_name = pais
+                jogador.time_id = id_time
+                jogador.time_nome = nome_time
+                jogador.url_imagem = url_foto
 
-            # Vincula apenas o SETOR (F, M, D, G)
+            db.flush()
+
+            # Associa jogador ao setor
             nome_setor = MAPA_SETORES.get(row['position'])
             if nome_setor:
                 setor_obj = db.query(SetorRef).filter_by(nome_setor=nome_setor).first()
                 if setor_obj and setor_obj not in jogador.setores:
                     jogador.setores.append(setor_obj)
+
         db.commit()
 
-        # --- 3. CARACTERÍSTICAS TÁTICAS E ASSOCIAÇÃO DE POSIÇÕES ---
-        print("Traduzindo táticas e vinculando jogador na posição...")
+        # Táticas e posições
+        print("Traduzindo táticas e vinculando posições aos jogadores...")
         df_tatica = pd.read_csv(URLS['tatica'])
 
         for _, row in df_tatica.iterrows():
@@ -173,11 +175,9 @@ def sincronizar_banco_de_dados():
             if not jogador:
                 continue
 
-            # 1. Traduz a string para o CaracteristicaTatica (Ex: "ST, CAM" -> "ATA, MEI")
             pos_traduzida = traduzir_posicao_eafc(row['posicoes_detalhadas'])
 
             if pos_traduzida:
-                # 2. Salva o texto traduzido na tabela de tática
                 tatica = CaracteristicaTatica(
                     player_id=player_id_planilha,
                     posicoes_detalhadas=pos_traduzida,
@@ -186,8 +186,6 @@ def sincronizar_banco_de_dados():
                 )
                 db.merge(tatica)
 
-                # 3. VÍNCULO REAL NA TABELA jogador_posicao
-                # Quebra a string traduzida ("ATA, MEI") para buscar cada ID no banco
                 siglas = []
                 partes_da_posicao = pos_traduzida.split(',')
 
@@ -202,91 +200,125 @@ def sincronizar_banco_de_dados():
 
         db.commit()
 
-        # --- 4. ESTATÍSTICAS (As 116 Colunas) ---
-        print("Processando as 116 estatísticas para jogadores válidos...")
+        # Processa estatísticas gerais
+        print("Processando o volume de estatísticas para jogadores cadastrados...")
         df_stats = pd.read_csv(URLS['stats'], decimal=',')
 
-        # Sincroniza os IDs
-        # Realiza a consulta no banco de dados
         resultado_consulta = db.query(Jogador.player_id).all()
-
-        # Inicializa a lista vazia
         lista_ids_validos = []
 
-        # Percorre os resultados e adiciona apenas o ID à lista
         for registro in resultado_consulta:
             lista_ids_validos.append(registro.player_id)
 
         df_stats = df_stats[df_stats['player_id'].isin(lista_ids_validos)]
 
-        # Limpeza das 116 colunas
+        # Limpa colunas que não são métricas de performance
         cols_para_ignorar = ['player_name', 'type', 'position', 'team_name', 'team_id', 'id', 'statisticsType']
 
         for col in df_stats.columns:
             if col not in cols_para_ignorar:
                 df_stats[col] = pd.to_numeric(df_stats[col], errors='coerce').fillna(0)
 
-        # Remove as colunas que não pertencem à tabela estatisticas_2025
-        # 1. Identificar quais colunas ignorar que realmente existem no DataFrame
         colunas_para_remover = []
-
         for coluna in cols_para_ignorar:
             if coluna in df_stats.columns:
                 colunas_para_remover.append(coluna)
 
-        # 2. Executar a remoção das colunas identificadas
         df_final_stats = df_stats.drop(columns=colunas_para_remover)
+
+        # Imprime o log das colunas selecionadas
+        print("\n" + "=" * 60)
+        print("--- RESUMO DA SELEÇÃO DE VARIÁVEIS ---")
+        print("=" * 60)
+        print(f"Colunas descartadas ({len(colunas_para_remover)}): {colunas_para_remover}")
+        print(f"Total de colunas na matriz resultante: {len(df_final_stats.columns)}")
+
+        colunas_restantes = df_final_stats.columns.tolist()
+        print("\nListando as 10 primeiras colunas mantidas na estrutura:")
+
+        for indice, coluna in enumerate(colunas_restantes[:10], start=1):
+            print(f"   {indice:03d} - {coluna}")
+
+        colunas_ocultas = len(colunas_restantes) - 10
+        if colunas_ocultas > 0:
+            print(f"   ... [+ {colunas_ocultas} colunas de dados do jogador]")
+
+        print("\nConversão de dados nulos preenchidos com 0.0 finalizada.")
+        print("=" * 60 + "\n")
 
         with engine.connect() as conexao:
             conexao.execute(text("TRUNCATE TABLE estatisticas_2025;"))
             conexao.commit()
 
-        # Agora o player_id será a única "chave" enviada junto com as métricas
         df_final_stats.to_sql('estatisticas_2025', con=engine, if_exists='append', index=False)
-        print("Sucesso! Dados limpos e 116 colunas integradas no MariaDB.")
+        print("Estatísticas integradas na base com sucesso.")
 
-        # --- 5. DEUSES DOS ARQUÉTIPOS ---
-        print("Processando os atributos dos Deuses (Arquétipos)...")
+        # Escalações e status de jogo
+        print("Processando logs de escalações e status de jogos...")
+        df_escalacoes = pd.read_csv(URLS['escalacoes'], header=None)
+
+        df_escalacoes.columns = ['rodada', 'jogo_id', 'time_lado', 'resultado_time', 'formacao', 'player_id',
+                                 'nome_jogador', 'posicao_jogo', 'camisa', 'status_jogo']
+
+        df_escalacoes['player_id'] = pd.to_numeric(df_escalacoes['player_id'], errors='coerce')
+        df_escalacoes = df_escalacoes.dropna(subset=['player_id'])
+        df_escalacoes = df_escalacoes[df_escalacoes['player_id'].isin(lista_ids_validos)]
+
+        def aplicar_regras_grupo(grupo):
+            """Ajusta a formação baseada na posição inicial em campo."""
+            formacao_base = str(grupo['formacao'].iloc[0])
+            posicoes_titulares = grupo[grupo['status_jogo'] == 'Titular']['posicao_jogo'].dropna().tolist()
+            formacao_refinada = refinar_formacao_tatica(formacao_base, posicoes_titulares)
+            grupo['formacao'] = formacao_refinada
+            return grupo
+
+        df_escalacoes = df_escalacoes.groupby(['jogo_id', 'time_lado'], group_keys=False).apply(aplicar_regras_grupo)
+
+        with engine.connect() as conexao:
+            conexao.execute(text("TRUNCATE TABLE escalacoes_partidas;"))
+            conexao.commit()
+
+        df_escalacoes.to_sql('escalacoes_partidas', con=engine, if_exists='append', index=False)
+        print("Escalações integradas no banco com sucesso.")
+
+        # Métricas dos deuses (arquétipos)
+        print("Processando métricas de referência para os arquétipos...")
         df_deuses = pd.read_csv(URLS['deuses'], decimal=',')
 
-        # As colunas inúteis para ignorar
         cols_para_ignorar_deuses = ['player_name', 'type', 'position', 'team_name', 'team_id', 'id', 'statisticsType',
                                     'nome_arquetipo']
 
-        # Limpa e converte para numérico tudo que não for a coluna de ignorar E não for o id_arquetipo
         for col in df_deuses.columns:
             if col not in cols_para_ignorar_deuses and col != 'id_arquetipo':
                 df_deuses[col] = pd.to_numeric(df_deuses[col], errors='coerce').fillna(0)
 
-        # Remove as colunas de texto/inúteis
         colunas_para_remover_deuses = []
         for coluna in cols_para_ignorar_deuses:
             if coluna in df_deuses.columns:
                 colunas_para_remover_deuses.append(coluna)
 
         df_final_deuses = df_deuses.drop(columns=colunas_para_remover_deuses)
-
-        # Insere na nova tabela deuses_arquetipos
         df_final_deuses.to_sql('deuses_arquetipos', con=engine, if_exists='append', index=False)
-        print("Sucesso! Deuses integrados no MariaDB.")
+        print("Atributos de arquétipos estruturados com sucesso.")
 
     except Exception as e:
-        print(f"Erro crítico: {e}")
+        print(f"Erro durante a sincronização de dados: {e}")
         db.rollback()
     finally:
         db.close()
 
 
-# --- BLOCO PRINCIPAL DE EXECUÇÃO ---
-if __name__ == "__main__":
-    # 1. Primeiro atualiza as tabelas base (Jogadores, Stats, Deuses)
+def executar_pipeline(caminho_json):
+    """Executa o pipeline completo (sincronização e cálculo de similaridade)."""
     sincronizar_banco_de_dados()
-
-    # 2. Com os dados novos no banco, chama a função para calcular
     print("\nIniciando cálculo de similaridade de arquétipos...")
     df_classificados = calcular_similaridade_arquetipos(caminho_json)
 
-    # 3. Finalmente, salva os cálculos na tabela classificacao_jogadores
     salvar_classificacao_jogadores(df_classificados)
+    print("\nPipeline de processamento finalizado com sucesso!")
 
-    print("\nProcesso completo finalizado com sucesso!")
+
+if __name__ == "__main__":
+    # Caminho do JSON contido externamente na raiz do script
+    CAMINHO_JSON = r"CAMINHO_JSON"
+    executar_pipeline(CAMINHO_JSON)
